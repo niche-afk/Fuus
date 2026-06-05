@@ -1,39 +1,39 @@
-#!/usr/bin/fish
+#!/usr/bin/env bash
 
-# update_fedora.fish - Update and upgrade Fedora packages
+# update_fedora.sh - Update and upgrade Fedora packages
 # Medium verbosity with error checking and restart prompts
 
-function main
+main() {
     echo "=== Fedora System Update Script ==="
     echo ""
 
     # Refresh repository metadata
     echo "Refreshing repository metadata..."
     dnf check-update --refresh
-    set refresh_status $status
+    refresh_status=$?
     
-    if test $refresh_status -eq 100
+    if [ $refresh_status -eq 100 ]; then
         echo "Updates are available"
-    else if test $refresh_status -ne 0
+    elif [ $refresh_status -ne 0 ]; then
         echo "Error: Failed to refresh repository metadata"
         return 1
     else
         echo "No updates available. System is up to date."
         return 0
-    end
+    fi
 
     echo ""
     
     # Perform upgrade (includes built-in confirmation prompt)
     echo "Starting package upgrade..."
     dnf upgrade
-    set upgrade_status $status
+    upgrade_status=$?
     
-    if test $upgrade_status -ne 0
+    if [ $upgrade_status -ne 0 ]; then
         echo ""
         echo "Error: Package upgrade failed with exit code $upgrade_status"
         return 1
-    end
+    fi
 
     echo ""
     echo "Package upgrade completed successfully"
@@ -42,74 +42,74 @@ function main
     # Check and update Flatpaks
     echo "=== Checking for Flatpak updates ==="
     
-    if command -v flatpak > /dev/null
+    if command -v flatpak > /dev/null 2>&1; then
         echo "Checking for Flatpak updates..."
-        flatpak remote-ls --updates
-        set flatpak_check_status $status
+        flatpak remote-ls --updates > /dev/null 2>&1
+        flatpak_check_status=$?
         
-        if test $flatpak_check_status -eq 0
-            set updates_available (flatpak remote-ls --updates 2>/dev/null)
+        if [ $flatpak_check_status -eq 0 ]; then
+            updates_available=$(flatpak remote-ls --updates 2>/dev/null)
             
-            if test -n "$updates_available"
+            if [ -n "$updates_available" ]; then
                 echo ""
                 echo "Starting Flatpak update..."
                 flatpak update
-                set flatpak_status $status
+                flatpak_status=$?
                 
-                if test $flatpak_status -ne 0
+                if [ $flatpak_status -ne 0 ]; then
                     echo "Warning: Flatpak update encountered issues (exit code $flatpak_status)"
                 else
                     echo "Flatpak updates completed successfully"
-                end
+                fi
             else
                 echo "No Flatpak updates available"
-            end
+            fi
         else
             echo "No Flatpak updates available"
-        end
+        fi
     else
         echo "Flatpak is not installed, skipping Flatpak updates"
-    end
+    fi
     
     echo ""
 
     # Check what needs restarting
     echo "Checking for services/processes that need restarting..."
     dnf needs-restarting -r
-    set reboot_status $status
+    reboot_status=$?
     
     echo ""
     
-    if test $reboot_status -eq 1
+    if [ $reboot_status -eq 1 ]; then
         # System reboot required
         echo "⚠ System reboot is required (kernel, systemd, or glibc updated)"
         echo ""
-        read -p "echo 'Do you want to reboot now? [y/N]: '" -n 1 reboot_choice
+        read -n 1 -p "Do you want to reboot now? [y/N]: " reboot_choice
         echo ""
         
-        if string match -qi "y" $reboot_choice
+        if [[ "$reboot_choice" =~ ^[Yy]$ ]]; then
             echo "Rebooting system in 5 seconds... (Ctrl+C to cancel)"
             sleep 5
             systemctl reboot
         else
             echo "Reboot cancelled. Please remember to reboot later."
-        end
+        fi
     else
         # Check for services that need restarting
         echo "Checking for services that need restarting..."
         dnf needs-restarting -s
         
-        if test $status -eq 1
+        if [ $? -eq 1 ]; then
             echo ""
             echo "ℹ Some services need restarting, but system reboot is not required"
             echo "You may want to restart affected services or log out and back in"
         else
             echo "No restart required. System is ready to use."
-        end
-    end
+        fi
+    fi
     
     return 0
-end
+}
 
 # Run main function
 main
